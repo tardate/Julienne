@@ -1,182 +1,187 @@
-
+= Julienne
 
 == core capabilities
 
-declare cube
-  :name
-  :on => define storage
-    resource: couch db
-    loading: batch, on demand
-     => in memory caching/storage: 
-    locking
-      
-  define dimension
-    source: ActiveRecord, ActiveResource, XML-RPC web service, SOAP web service, text file (csv)
-    alias field mapping
-    attributes
-    - dynamically add dimension to cube
+  declare cube
+    :name
+    :on => define storage
+      resource: couch db
+      loading: batch, on demand
+       => in memory caching/storage: 
+      locking
+        
+    define dimension
+      source: ActiveRecord, ActiveResource, XML-RPC web service, SOAP web service, text file (csv)
+      alias field mapping
+      attributes
+      - dynamically add dimension to cube
     
-== pseudocode
+== some pseudocode
  
- 
- 
-# define a cube
-cube = Julienne.new
-cube = Julienne.create( :name => 'Test', 
-  :on => storagefactory    # memory, file, memcached, couchdb, AR
-)
-
-class MyCube < Julienne::Base
-
-  has_dimension ...
   
-end
+# define a cube
+
+  cube = Julienne.new
+  cube = Julienne.create( :name => 'Test', 
+    :on => storagefactory    # memory, file, memcached, couchdb, AR
+  )
+  
+  class MyCube < Julienne::Base
+  
+    has_dimension ...
+    
+  end
 
 # define a dimension
-dimension = cube.dimensions.new
-dimension = cube.dimension.create( 
-  :source => Activity,                                    # ActiveRecord
-  :name => 'Acivities',                                   # default => infered from datasource e.g. ActiveRecord name
-  :id => :id,                                           # default => infered from datasource e.g. AR => :id
-  :aliases => { :name,  lambda { "#{:id} - #{:description}" } },  # define an alias identifier
-  :attributes => {}                                       # define attributes to be set {all fields available by default based on AR model}
-  :conditions => {}                                       # limit selection
-  :element_unspecified => 'Unspecified Activity',
-  :element_all => 'All Activities'
-)
 
-# id = 1, name = 'test', description = 'desc'
+  dimension = cube.dimensions.new
+  dimension = cube.dimension.create( 
+    :source => Activity,                                    # ActiveRecord
+    :name => 'Acivities',                                   # default => infered from datasource e.g. ActiveRecord name
+    :id => :id,                                           # default => infered from datasource e.g. AR => :id
+    :aliases => { :name,  lambda { "#{:id} - #{:description}" } },  # define an alias identifier
+    :attributes => {}                                       # define attributes to be set {all fields available by default based on AR model}
+    :conditions => {}                                       # limit selection
+    :element_unspecified => 'Unspecified Activity',
+    :element_all => 'All Activities'
+  )
+
+# e.g. for record: id = 1, name = 'test', description = 'desc'
 # access by id or alias =>
-1
-'test'
-'1 - desc'
+  1
+  'test'
+  '1 - desc'
 
+# short-form for ActiveRecord
+  dimension = cube.dimension.create( 
+    :source => Customer                                    # ActiveRecord
+  )
 
-
-dimension = cube.dimension.create( 
-  :source => Customer                                    # ActiveRecord
-)
-
-
+question: how much could I actually infer from existing ActiveRecord models and relationships?
+- seems like could pick up all key relationship for known models
+- only need to define exceptions or relationships not modelled for normal AR use
 
 # get a dimension
-dimension = cube.dimensions['Activity']
-dimension = cube.activities
+
+  dimension = cube.dimensions['Activity']
+  dimension = cube.activities
 
   
 # access dimensional elements
-dimension.each do |element|
-  puts element.id
-end
-element = dimension[ :id => 'id or alias']
+  dimension.each do |element|
+    puts element.id
+  end
+  element = dimension[ :id => 'id or alias']
 
 # add a virtual element (consolidation point)
-dimension.elements.add( :id => 'All Activities', :items => dimension.elements.all ) # could be a lambda/closure to define items
-# could predefine some "All X", "Undefined X"
+  dimension.elements.add( :id => 'All Activities', :items => dimension.elements.all ) # could be a lambda/closure to define items
+- could predefine (expect by convention) some "All X", "Undefined X" elements?
 
 # add a virtual element (consolidation point)
-dimensions['Revenue'].elements.add( :id => 'Gross Profit', :parent => null, :items => { 'Revenue', 'Direct Cost' } )
-gross_profit = dimension[ 'Gross Profit' ] 
+  dimensions['Revenue'].elements.add( :id => 'Gross Profit', :parent => null, :items => { 'Revenue', 'Direct Cost' } )
+  gross_profit = dimension[ 'Gross Profit' ] 
 
 
 # add a virtual element rule (calculated value)
-dimension.element.add( :id => 'Gross Profit (USD)', :parent => null )  do |element|
-  (:revenue + :direct_cost ) * Julienne.cubes('FX').get( )                             # implicit match on matching dimensional elements 
-end
+  dimension.element.add( :id => 'Gross Profit (USD)', :parent => null )  do |element|
+    (:revenue + :direct_cost ) * Julienne.cubes('FX').get( )                             # implicit match on matching dimensional elements 
+  end
 
 # also need a way to attacha  rule to a cube??
-cube.rules do |rule|
-  
-end     
+  cube.rules do |rule|
+    
+  end     
 
 
 # dimensional relationships   
-infered via AR conventions e.g.
-  For cube with Activity and Customer dimensions
-    if Activity.customer_id defined => direct relation
-    if no matching column, assume "All X", or "Undefined X" (depending on context)
-declared relations
-
-dimension = cube.dimension.create( :source => Activity )
-
-dimension = cube.dimension.create( 
-  :source => Customer,
-  :
-)      
+  infered via AR conventions e.g.
+    For cube with Activity and Customer dimensions
+      if Activity.customer_id defined => direct relation
+      if no matching column, assume "All X", or "Undefined X" (depending on context)
+  declared relations
+  
+  dimension = cube.dimension.create( :source => Activity )
+  
+  dimension = cube.dimension.create( 
+    :source => Customer,
+    :
+  )      
 
 # measures or virtual dimensions?
                    
  
 # query a cube for a specific value
-result = cube.get(
-  :activity => {'1 - description',2,3},
-  :customer => 'Joe',
-  :year => [ 2007, 2008]
-  :year => :all
-  :year => :unspecified
-  
-)
+  result = cube.get(
+    :activity => {'1 - description',2,3},
+    :customer => 'Joe',
+    :year => [ 2007, 2008]
+    :year => :all
+    :year => :unspecified
+    
+  )
 
 
 # get a recordset for a given dimensional specification. Assume cube [customers, activities, years]
-result = cube.find(
-  :activity => 'test',
-) #since customer and year not specified, activity assumed to be the measure
+  result = cube.find(
+    :activity => 'test',
+  ) #since customer and year not specified, activity assumed to be the measure
 
 # metadata methods - find out the dimensionality of the result set?
-result.is_leaf?
-=> false
-result.dimensions
-result.customers.leaf?
-result.customers.all?
-result.customers.unspecified?
+  result.is_leaf?
+  => false
+  result.dimensions
+  result.customers.leaf?
+  result.customers.all?
+  result.customers.unspecified?
+  
+  result.customers.size => 3
+  => ['Joe','Fred','..]
+  
+  result.years.size => 2
+  => [ 2007, 2009 ]
+  
+  result.activities.size => 1
 
-result.customers.size => 3
-=> ['Joe','Fred','..]
 
-result.years.size => 2
-=> [ 2007, 2009 ]
-
-result.activities.size => 1
-
-
-result.years.sort.each do |year|
-  year.customers.sort_by_name.each do |customer|
-    puts "#{year} #{customer.name}"
+  result.years.sort.each do |year|
+    year.customers.sort_by_name.each do |customer|
+      puts "#{year} #{customer.name}"
+    end
   end
-end
-->
+  =>
+  2007  Activity A
+  2007  Activity B
+  2007  Activity C
+  2008  Activity A
+  2008  Activity B
 
-2007  Activity A
-2007  Activity B
-2007  Activity C
-2008  Activity A
-2008  Activity B
 
 === security
 need to be able to hook declarative and programmatic security
-  at the model level?
-  or leave to a controller responsibility? [rails specific]
+- at the model level?
+- or leave to a controller responsibility? [rails specific]
 
-before_select
+before_select?
 
 == Jules
 ActionPack for Julienne
 
 core capabilities:
-  adapter for Julienne, MDX
-  table view rendering
+-  adapter for Julienne, MDX
+-  table view rendering
 
-  controller and route helpers?
-  ui components
-    active table
-    toolbar
+-  controller and route helpers?
+-  ui components
+-    active table
+-    toolbar
     
     
 == test/sample model
 
 CupcakeSupplies
+
 dimensions:
+  
   products
     recipe_id
   ingredients
@@ -200,4 +205,4 @@ queries:
   ingredient usage per product over time 
   revenue, cost, profit per product over time
   given period, profit per product
-  
+
